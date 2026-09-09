@@ -9,11 +9,27 @@
     "owner": "philipkraeutl",
     "versions": [
       {
+        "version": "1.1.0.0",
+        "changelog": "Release for Jellyfin 10.11.x. See the GitHub release notes.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/philipkraeutl/jellyfin-plugin-animefiller/releases/download/v1.1.0.0/animefiller_1.1.0.0.zip",
+        "checksum": "E68ECF23C44B3AA2719613C0D8A8E278",
+        "timestamp": "2026-09-09T12:29:24Z"
+      },
+      {
+        "version": "1.1.0.0",
+        "changelog": "Release for Jellyfin 12.x. See the GitHub release notes.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/philipkraeutl/jellyfin-plugin-animefiller/releases/download/v1.1.0.0/animefiller-jellyfin12_1.1.0.0.zip",
+        "checksum": "C9F879E15E877AC31A0055901D905CF8",
+        "timestamp": "2026-09-09T12:29:24Z"
+      },
+      {
         "checksum": "4950c361d153d19c3ef01c04c5005ef5",
         "changelog": "See GitHub release notes.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/Staubgeborener/jellyfin-plugin-animefiller/releases/download/v1.0.0.2/AnimeFiller_1.0.0.2.zip",
-        "timestamp": "2026-02-22T16:53:38.0000000+00:00",
+        "timestamp": "2026-02-22T16:53:38+00:00",
         "version": "1.0.0.2"
       },
       {
@@ -21,7 +37,7 @@
         "changelog": "See GitHub release notes.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/Staubgeborener/jellyfin-plugin-animefiller/releases/download/v1.0.0.1/AnimeFiller_1.0.0.1.zip",
-        "timestamp": "2026-02-22T16:40:01.0000000+00:00",
+        "timestamp": "2026-02-22T16:40:01+00:00",
         "version": "1.0.0.1"
       }
     ]
