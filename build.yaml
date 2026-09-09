@@ -1,0 +1,17 @@
+---
+name: "Anime Filler Marker"
+guid: "d4c3b2a1-f5e6-7890-abcd-ef0987654321"
+version: "1.1.0.0"
+targetAbi: "12.0.0.0"
+framework: "net10.0"
+overview: "Use animefillerlist.com to automatically flag filler episodes."
+description: >
+  Marks anime filler episodes with [F] and mixed canon/filler episodes with
+  [C/F] in the episode title.
+category: "General"
+owner: "philipkraeutl"
+artifacts:
+  - "Jellyfin.Plugin.AnimeFiller.dll"
+  - "HtmlAgilityPack.dll"
+changelog: >
+  Adds Jellyfin 12 and .NET 10 compatibility plus automated release packaging.

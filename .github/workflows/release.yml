@@ -1,0 +1,123 @@
+name: Release plugin
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Four-part plugin version, for example 1.1.0.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up .NET 9 and 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+      - name: Determine release version
+        id: version
+        shell: pwsh
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME -replace '^v', '' } else { $env:DISPATCH_VERSION.Trim() -replace '^v', '' }
+          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw "Release version '$version' must contain four numeric parts." }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+      - name: Package Jellyfin 10.11 build
+        shell: pwsh
+        run: ./scripts/package.ps1 -Version "${{ steps.version.outputs.version }}" -Framework net9.0 -JellyfinVersion 10.11.0
+      - name: Package Jellyfin 12 build
+        shell: pwsh
+        run: ./scripts/package.ps1 -Version "${{ steps.version.outputs.version }}" -Framework net10.0 -JellyfinVersion 12.0.0 -PackageSuffix "-jellyfin12"
+      - name: Update release metadata and manifest
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          $version = $env:RELEASE_VERSION
+          $build = Get-Content build.yaml -Raw
+          $build = $build -replace '(?m)^version:\s*"?[^\r\n"]+"?\s*$', "version: `"$version`""
+          Set-Content build.yaml $build -Encoding utf8 -NoNewline
+          $projectPath = 'Jellyfin.Plugin.AnimeFiller/Jellyfin.Plugin.AnimeFiller.csproj'
+          $project = Get-Content $projectPath -Raw
+          $project = $project -replace '<PluginVersion Condition="''\$\(PluginVersion\)'' == ''''">[^<]+</PluginVersion>', "<PluginVersion Condition=`"'`$(PluginVersion)' == ''`">$version</PluginVersion>"
+          Set-Content $projectPath $project -Encoding utf8 -NoNewline
+          $manifest = @(Get-Content manifest.json -Raw | ConvertFrom-Json)
+          $timestamp = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+          $variants = @(
+            [ordered]@{ targetAbi = '10.11.0.0'; file = "animefiller_$version.zip"; changelog = 'Release for Jellyfin 10.11.x. See the GitHub release notes.' },
+            [ordered]@{ targetAbi = '12.0.0.0'; file = "animefiller-jellyfin12_$version.zip"; changelog = 'Release for Jellyfin 12.x. See the GitHub release notes.' }
+          )
+          $entries = foreach ($variant in $variants) {
+            $archive = "artifacts/$($variant.file)"
+            [ordered]@{
+              version = $version; changelog = $variant.changelog; targetAbi = $variant.targetAbi
+              sourceUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/$($variant.file)"
+              checksum = (Get-FileHash -Algorithm MD5 $archive).Hash.ToUpperInvariant(); timestamp = $timestamp
+            }
+          }
+          $abis = @('10.11.0.0', '12.0.0.0', '12.0')
+          $older = @($manifest[0].versions | Where-Object { $_.version -ne $version -or $_.targetAbi -notin $abis })
+          $manifest[0].owner = 'philipkraeutl'
+          $manifest[0].versions = @($entries) + $older
+          ConvertTo-Json -InputObject $manifest -Depth 10 | Set-Content manifest.json -Encoding utf8
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: animefiller-${{ steps.version.outputs.version }}
+          path: |
+            artifacts/*.zip
+            artifacts/*.zip.sha256
+            manifest.json
+          if-no-files-found: error
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "artifacts/animefiller_${RELEASE_VERSION}.zip" \
+            "artifacts/animefiller_${RELEASE_VERSION}.zip.sha256" \
+            "artifacts/animefiller-jellyfin12_${RELEASE_VERSION}.zip" \
+            "artifacts/animefiller-jellyfin12_${RELEASE_VERSION}.zip.sha256" \
+            --target "$GITHUB_SHA" --title "Anime Filler Marker $RELEASE_VERSION" --generate-notes
+      - name: Publish updated manifest and version metadata
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cp manifest.json "$RUNNER_TEMP/manifest.json"
+          cp build.yaml "$RUNNER_TEMP/build.yaml"
+          cp Jellyfin.Plugin.AnimeFiller/Jellyfin.Plugin.AnimeFiller.csproj "$RUNNER_TEMP/Jellyfin.Plugin.AnimeFiller.csproj"
+          git fetch origin "$DEFAULT_BRANCH"
+          git checkout -B "$DEFAULT_BRANCH" "origin/$DEFAULT_BRANCH"
+          cp "$RUNNER_TEMP/manifest.json" manifest.json
+          cp "$RUNNER_TEMP/build.yaml" build.yaml
+          cp "$RUNNER_TEMP/Jellyfin.Plugin.AnimeFiller.csproj" Jellyfin.Plugin.AnimeFiller/Jellyfin.Plugin.AnimeFiller.csproj
+          if ! git diff --quiet -- manifest.json build.yaml Jellyfin.Plugin.AnimeFiller/Jellyfin.Plugin.AnimeFiller.csproj; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add manifest.json build.yaml Jellyfin.Plugin.AnimeFiller/Jellyfin.Plugin.AnimeFiller.csproj
+            git commit -m "Update release metadata for v${RELEASE_VERSION}"
+            git push origin "HEAD:${DEFAULT_BRANCH}"
+          fi
